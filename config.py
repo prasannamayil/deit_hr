@@ -44,7 +44,7 @@ def get_args_train():
     parser.add_argument("--ablation", type=bool, default=False, help="fix qk values for ablation study")
     parser.add_argument("--sa_stats", type=bool, default=False, help="retreive self attention stats like q, k, v, attn etc.")
     parser.add_argument("--interpolate_pos_embedding", type=bool, default=True, help="interpolate pos embedding or just take average")
-    parser.add_argument("--rw_attn", type=str, default='hierarchical', help="reweight attention, options: standard, hierarchical")
+    parser.add_argument("--rw_attn", type=str, default='hierarchical_peers', help="reweight attention, options: standard, hierarchical")
     parser.add_argument("--rw_coeff", type=float, default=1, help="reweight attention, options: 2, 4. Note: if hierarchical, always give at least 1. If standard, give 2 or 4. ")
 
     """ Can make the entire chunk/s below cleaner
