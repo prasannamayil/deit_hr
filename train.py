@@ -74,18 +74,18 @@ def one_epoch(data_loader, net, device, criterion, optimizer, fmodel, attack, is
 
         net.eval() ## For calculating input gradients norms
         grad_norm_batch = l2_norm_grads(images, labels, net, criterion, optimizer)
-        avg_input_grad_norm+=grad_norm_batch*len(images) 
+        avg_input_grad_norm+=grad_norm_batch*len(images)
 
         net.eval() ## For calculating advs gradients norms
         adv_grad_norm_batch = l2_norm_grads(advs, labels, net, criterion, optimizer)
-        avg_adv_grad_norm+=adv_grad_norm_batch*len(images) 
-        
+        avg_adv_grad_norm+=adv_grad_norm_batch*len(images)
+
         total_images+=len(images)
         if (i+1)%100 == 0:
             print("i = {} Accuracy_Advs = {} Loss_Advs = {} Grad_norm_natural {}".format(i+1, acc_advs.item(), loss_advs.item(), adv_grad_norm_batch))
             print(f"time taken for 100 batches: {time()-start_time_100}")
             start_time_100 = time()
-    
+
 
     return avg_vulnerabilities/total_images, avg_adv_loss/total_images, avg_adv_accuracy/total_images, avg_input_grad_norm/total_images, avg_adv_grad_norm/total_images
 
@@ -98,14 +98,14 @@ def main(args):
         """ May need to be filled
         """
         tr_loader, va_loader, te_loader = dataloader_IMAGENET12(args)
-        
+
 
 
     ## Get stat accumulators ready
     losses_adversaries, vulnerabilities, accuracies_adversaries, \
     grad_norms_adversaries, grad_norms_input \
      = init_stat_dictionaries(args)
-    
+
     ## Get devices ready
     device, device_ids = setup_device(args['number_of_gpus'])
 
@@ -113,6 +113,7 @@ def main(args):
     ## Get pretrained model and wrap it
     model = get_model(args)
     net = wrap_model(model, args)
+    print(f"model upsampled? {net.upsample}")
 
     ## Get criterion, optimizer and scheduler
     criterion = nn.CrossEntropyLoss() ## the loss function
@@ -138,14 +139,14 @@ def main(args):
             checkpoint = torch.load(args['directory_net']+"best.pth")
         else:
             checkpoint = torch.load(args['directory_net']+"current.pth")
-        
+
         ## Load the state
         net.load_state_dict(checkpoint['state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer'])
         scheduler.load_state_dict(checkpoint['lr_scheduler'])
         args['resume_epoch'] = checkpoint['epoch']
 
-   
+
 
     ## Parallelization of the network
     if len(device_ids) > 1:
@@ -154,7 +155,7 @@ def main(args):
     net = net.to(device)
 
 
-    
+
     ## Get attack and convert network to foolbox model
     attack = return_attack(args['attack_key'], args['pgd_steps'])
 
