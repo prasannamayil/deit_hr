@@ -601,7 +601,7 @@ def get_model(args):
             edit_pos_embedding(model, img_size=224, patch_size=16, embedding_size=192, timm=True, interpolate=args['interpolate_pos_embedding'])
 
     elif model_name == 'hit':
-        model = create_model('vit_deit_tiny_patch16_224', num_scales = args['num_scales'], attn_stats = args['sa_stats'], rw_attn=args['rw_attn'], rw_coeff=args['rw_coeff'], pretrained=False)
+        model = create_model('hit_small_patch1_32', num_scales = args['num_scales'], attn_stats = args['sa_stats'], rw_attn=args['rw_attn'], rw_coeff=args['rw_coeff'], pretrained=False)
         print(f"Loaded HiT with classes = {num_classes}")
 
         ## Finetuning only the classifier
