@@ -614,6 +614,8 @@ def get_model(args):
             print("Training only the classifier")
 
         ## Editing the position embedding if num_scales > 1
+        if args['num_scales'] > 1:
+            edit_pos_embedding(model, img_size=32, patch_size=1, embedding_size=192, timm=True, interpolate=args['interpolate_pos_embedding'])
 
     else:
         print("Model doesn't exist")
