@@ -128,7 +128,11 @@ default_cfgs = {
     'vit_base_patch16_224_miil': _cfg(
         url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm'
             '/vit_base_patch16_224_1k_miil_84_4.pth',
-        mean=(0, 0, 0), std=(1, 1, 1), crop_pct=0.875, interpolation='bilinear',
+        mean=(0, 0, 0), std=(1, 1, 1),  interpolation='bilinear',
+    ),
+
+    'hit_small_patch1_32': _cfg(
+        url='', 'input_size': (3, 32, 32), mean=(0.449, 0.449, 0.449), std=(0.226, 0.226, 0.226), interpolation='bilinear', num_classes=10,
     ),
 }
 
@@ -156,9 +160,9 @@ class Attention(nn.Module):
             self.out_val = None
             self.attn_weights = None
 
-        ## reweighting attention (196/num_tokens need rework so that this works for any model)
+        ## reweighting attention (1024/num_tokens need rework so that this works for any model)
         if rw_attn == 'standard':
-            dim_rw = num_tokens = 196 # Ugly
+            dim_rw = num_tokens = 1024 # Ugly
             dim_rw += 1
 
             num_tokens_sqrt = np.sqrt(num_tokens)
@@ -173,10 +177,20 @@ class Attention(nn.Module):
                 end_dim = int(start_dim+dim_length)
                 self.reweighting_matrix[:, start_dim:end_dim] = rw_coeff**(i+1)
                 start_dim = end_dim
-        elif rw_attn == 'hierarchical':
-            rw_matrix = hierarchical_reweighting_matrix(num_scales, rw_coeff=rw_coeff)
+        elif rw_attn == 'hierarchical': ## THis is old
+            rw_matrix = hierarchical_reweighting_matrix(num_scales, within_scale_attn='all', rw_coeff=rw_coeff)
             self.reweighting_matrix = torch.nn.Parameter(torch.Tensor(rw_matrix))
+            self.reweighting_matrix.requires_grad = False ## Very very important
 
+        elif rw_attn == 'hierarchical_peers': ## THis is old
+            rw_matrix = hierarchical_reweighting_matrix(num_scales, within_scale_attn='peers', rw_coeff=rw_coeff)
+            self.reweighting_matrix = torch.nn.Parameter(torch.Tensor(rw_matrix))
+            self.reweighting_matrix.requires_grad = False ## Very very important
+
+        elif rw_attn == 'hierarchical_vertical': ## THis is old
+            rw_matrix = hierarchical_reweighting_matrix(num_scales, within_scale_attn=None, rw_coeff=rw_coeff)
+            self.reweighting_matrix = torch.nn.Parameter(torch.Tensor(rw_matrix))
+            self.reweighting_matrix.requires_grad = False ## Very very important
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
@@ -752,9 +766,23 @@ def vit_base_patch16_224_miil(pretrained=False, **kwargs):
     model = _create_vision_transformer('vit_base_patch16_224_miil', pretrained=pretrained, **model_kwargs)
     return model
 
+@register_model
+def hit_small_patch1_32(pretrained=False, **kwargs):
+    """ HiT new model.
+    """
+    model_kwargs = dict(patch_size=1, embed_dim=192, depth=12, num_heads=3, qkv_bias=False, num_classes=10, drop_path_rate=0.1, **kwargs)
+    model = _create_vision_transformer('hit_small_patch1_32', pretrained=pretrained, **model_kwargs)
+    return model
+
 ### My function
 
-def hierarchical_reweighting_matrix(num_scales, num_tokens=196, kernel_size=2, rw_coeff=1, print_loc=False):
+def hierarchical_reweighting_matrix(num_scales, num_tokens=1024, kernel_size=2, rw_coeff=1, within_scale_attn='peers', print_loc=False):
+    '''
+    For rw_coeff = 1 everything works perfectly. For within_scale_attn='all', within each scale, all
+    tokens attend to each other, for 'peers' only to 'peers', for None info flow is strictly vertical.
+    For other values of rw_coeff code breaks. So change the specified lines (given in brackets)
+    carefully, and also have a thorough check just to be sure.
+    '''
     dim_rw = num_tokens
     dim_rw += 1
     num_tokens_sqrt = np.sqrt(num_tokens)
@@ -762,30 +790,37 @@ def hierarchical_reweighting_matrix(num_scales, num_tokens=196, kernel_size=2, r
     for i in range(num_scales - 1): dim_rw += int(num_tokens_sqrt / (2 ** (i + 1))) * int(
         num_tokens_sqrt / (2 ** (i + 1)))  ## each row should be integerized
 
-    rw_matrix = np.zeros((dim_rw, dim_rw))  ## initialize the reweighting matrix
+    #rw_matrix = np.zeros((dim_rw, dim_rw))  ## initialize the reweighting matrix
+    rw_matrix = np.eye(dim_rw)  ## initialize the reweighting matrix
 
     #### Populate self attention within scale and class token attention
 
-    ## scale 1 self attention
+    if within_scale_attn == 'all':
+        ## scale 1 self attention
+        dim_start = 1
+        dim_end = num_tokens + 1
+        rw_matrix[dim_start:dim_end, dim_start:dim_end] = 1
 
-    dim_start = 1
-    dim_end = num_tokens + 1
-    rw_matrix[dim_start:dim_end, dim_start:dim_end] = 1
-
-    dim_start = dim_end
-    new_scale_tokens = int(num_tokens_sqrt) * int(num_tokens_sqrt)
-
-    ## Other scales self attention
-    for i in range(num_scales - 1):
-        scale = i + 2
-        new_scale_tokens = int(num_tokens_sqrt / (2 ** (i + 1))) * int(num_tokens_sqrt / (2 ** (i + 1)))
-        dim_end += new_scale_tokens
-        rw_matrix[dim_start:dim_end, dim_start:dim_end] = rw_coeff ** (scale - 1)
         dim_start = dim_end
+        new_scale_tokens = int(num_tokens_sqrt) * int(num_tokens_sqrt)
 
-    ## class_token attending to last scale and vice versa
-    rw_matrix[0, -new_scale_tokens:] = rw_coeff ** (scale - 1)
-    rw_matrix[-new_scale_tokens:, 0] = rw_coeff ** (scale - 1)
+        ## Other scales self attention
+        for i in range(num_scales - 1):
+            scale = i + 2
+            new_scale_tokens = int(num_tokens_sqrt / (2 ** (i + 1))) * int(num_tokens_sqrt / (2 ** (i + 1)))
+            dim_end += new_scale_tokens
+            rw_matrix[dim_start:dim_end, dim_start:dim_end] = rw_coeff ** (scale - 1)
+            dim_start = dim_end
+
+
+    last_scale_tokens = int(num_tokens_sqrt / (2 ** (num_scales - 1))) * int(num_tokens_sqrt / (2 ** (num_scales - 1)))
+    if within_scale_attn == 'peers': ## for the last scale, attend all tokens to each other
+        rw_matrix[-last_scale_tokens:, -last_scale_tokens:] = 1 ## This doesn't work if rw_coeff exists (Please have a closer look later)
+
+
+    ## class_token attending to last scale and vice versa (rw_coeff doesnt work be careful!)
+    rw_matrix[0, -last_scale_tokens:] = rw_coeff ** (num_scales - 1)
+    rw_matrix[-last_scale_tokens:, 0] = rw_coeff ** (num_scales - 1)
     rw_matrix[0, 0] = 1  # token self attention (here should coefficient be something else?)
 
     #### Cross attention between scales (aka dealing with reshaping madness)
@@ -809,6 +844,14 @@ def hierarchical_reweighting_matrix(num_scales, num_tokens=196, kernel_size=2, r
 
             rw_matrix[loc_current_emb, locs_array] = rw_coeff ** (scale - 2)
             rw_matrix[locs_array, loc_current_emb] = rw_coeff ** (scale - 1)
+
+            if within_scale_attn == 'peers': ## Within each scale attend only to peers/siblings
+                locs_array_x = np.repeat(locs_array, len(locs_array))
+                locs_array_y = np.tile(locs_array, len(locs_array))
+                rw_matrix[locs_array_x, locs_array_y] = 1 ## This doesn't work if rw_coeff exists (Please have a closer look later)
+
+
+
             if print_loc:
                 print(f"curr loc = {loc_current_emb}, locs array = {locs_array}")
 

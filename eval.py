@@ -78,7 +78,12 @@ def eval(data_loader, net, device, criterion, attack, fmodel, optimizer, sample_
 
       # Adversaries stats (can pass all epsilons in one go, make this change later)
       for k in eps_stack:
-          _, [advs], advs_success = attack(fmodel, images, labels, epsilons=[k])
+          if k!=0.0:
+              _, [advs], advs_success = attack(fmodel, images, labels, epsilons=[k])
+          else:
+              advs = images.detach()
+              advs_success = 0
+
 
           optimizer.zero_grad()
 

@@ -11,20 +11,17 @@ import torchvision.datasets as datasets
 import numpy as np
 
 
-## Transforms
-
-## They just use flip, so I'm removing crop. Normalize in model wrapper. 
-
 def dataloader_CIFAR10(args):
     batch_size = args['batch_size']
     num_workers = args['num_workers']
     root = args['data_root']
     valid_size = args['val_split_size']
 
-    
     transform_train = transforms.Compose([
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor()
+        transforms.RandomResizedCrop(32, scale=(0.15, 1.0)),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4),
+        transforms.ToTensor(),
     ])
 
     transform_test = transforms.Compose([

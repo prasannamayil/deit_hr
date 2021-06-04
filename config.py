@@ -13,7 +13,7 @@ def get_args_train():
     parser = argparse.ArgumentParser()
     
     ## Training procedure args
-    parser.add_argument("--model_name", type=str, default='deit_tiny', help="what model to PGD train.  Possible args are vit, resnet, efficientnet")
+    parser.add_argument("--model_name", type=str, default='hit', help="what model to PGD train.  Possible args are vit, resnet, efficientnet, deit_tiny, hit")
     parser.add_argument("--train_all_params", type=bool, default=True, help="Train the entire network or just the classifier")
     parser.add_argument("--train_steps", type=int, default=20000, help="number_of_steps_train")
     parser.add_argument("--warmup_steps", type=int, default=500, help='learning rate warm up steps')
@@ -28,6 +28,8 @@ def get_args_train():
     parser.add_argument("--resume_training", type=bool, default=False, help='To resume training from checkpoint')
     parser.add_argument("--base_directory", type=str, default= "/cluster/scratch/pmayilvahana/deit_hr_week13/", help="directory to save everything")
     parser.add_argument("--bounds", type=tuple, default=(0, 1), help='bounds for foolbox fmodel')
+
+    parser.add_argument("--optimizer", type=str, default='AdamW', help='SGD/Adam/AdamW')
     parser.add_argument("--weight_decay", type=float, default=0.0,help='weight decay for optim')
     parser.add_argument("--momentum", type=float, default=0.9,help='momentum for optim')
 
@@ -38,7 +40,7 @@ def get_args_train():
     parser.add_argument("--val_split_size", type=float, default=0.1, help="split size of validation")
 
     ## ViT/DeiT args
-    parser.add_argument("--num_scales", type=int, default='1', help="number of scales for multi-scale ViT")
+    parser.add_argument("--num_scales", type=int, default='5', help="number of scales for multi-scale ViT")
     parser.add_argument("--ablation", type=bool, default=False, help="fix qk values for ablation study")
     parser.add_argument("--sa_stats", type=bool, default=False, help="retreive self attention stats like q, k, v, attn etc.")
     parser.add_argument("--interpolate_pos_embedding", type=bool, default=True, help="interpolate pos embedding or just take average")
@@ -70,6 +72,11 @@ def get_args_train():
     elif args['model_name'] == 'deit_tiny':  ##  ## deit tiny
         args['model_key'] = str(4)
         args['model_input_size'] = 224
+
+    elif args['model_name'] == 'hit':  ##  ## deit tiny
+        args['model_key'] = str(5)
+        args['model_input_size'] = 32
+
     else:
         raise ValueError('model name = '+args['model_name']+' is not in the list')
 
@@ -133,6 +140,10 @@ def get_args_train():
     else:
          raise ValueError('dataset = '+args['dataset']+' is not in the list')
 
+    ## Don't upsample if HiT and CIFAR10 (very ugly)
+    if args['dataset'] == 'CIFAR10' and args['model_name'] == 'hit':
+        args['upsample'] = False
+
     ## number of epochs
     args['num_epochs'] = int(args['train_steps']//(args['train_size']/args['batch_size']))
 
@@ -152,7 +163,7 @@ def get_args_eval():
     parser = argparse.ArgumentParser()
 
     ## basic eval procedure arguments
-    parser.add_argument("--model_name", type=str, default='deit_tiny', help="what model to PGD eval. Possible args are vit, resnet, efficientnet")
+    parser.add_argument("--model_name", type=str, default='hit', help="what model to PGD eval. Possible args are vit, resnet, efficientnet, deit_tiny, hit")
     parser.add_argument("--train_all_params", type=bool, default=True, help="Train the entire network or just the classifier")
     parser.add_argument("--learning_rate", type=float, default=0.03, help='learning rate to train the model')
     parser.add_argument("--num_workers", type=int, default=8, help='number of workers for the data loader')
@@ -165,6 +176,7 @@ def get_args_eval():
     
     parser.add_argument("--bounds", type=tuple, default=(0, 1), help='bounds for foolbox fmodel')
     parser.add_argument("--weight_decay", type=float, default=0.0,help='weight decay for optim')
+    parser.add_argument("--optimizer", type=str, default='AdamW', help='SGD/Adam/AdamW')
     parser.add_argument("--momentum", type=float, default=0.9,help='momentum for optim')
 
     parser.add_argument("--colab", type=bool, default=False,help='marker for training on colab')
@@ -186,11 +198,11 @@ def get_args_eval():
     parser.add_argument("--val_split_size", type=float, default=0.1, help="split size of validation")
     
     ## ViT args
-    parser.add_argument("--num_scales", type=int, default='1', help="number of scales for multi-scale ViT")
+    parser.add_argument("--num_scales", type=int, default='5', help="number of scales for multi-scale ViT")
     parser.add_argument("--ablation", type=bool, default=False, help="fix qk values for ablation study")
     parser.add_argument("--sa_stats", type=bool, default=False, help="retreive self attention stats like q, k, v, attn etc.")
     parser.add_argument("--interpolate_pos_embedding", type=bool, default=True, help="interpolate pos embedding or just take average")
-    parser.add_argument("--rw_attn", type=str, default='hierarchical', help="reweight attention, options: standard, hierarchical")
+    parser.add_argument("--rw_attn", type=str, default='hierarchical_peers', help="reweight attention, options: standard, hierarchical, hierarchical_peers, hierarchical_vertical")
     parser.add_argument("--rw_coeff", type=float, default=1, help="reweight attention, options: 2, 4. Note: if hierarchical, always give at least 1. If standard, give 2 or 4. ")
 
     ap = parser.parse_args()
@@ -215,6 +227,10 @@ def get_args_eval():
     elif args['model_name'] == 'deit_tiny':  ## deit tiny
         args['model_key'] = str(4)
         args['model_input_size'] = 224
+
+    elif args['model_name'] == 'hit':  ##  ## deit tiny
+        args['model_key'] = str(5)
+        args['model_input_size'] = 32
 
     ## Get the epsilon key and eps stuff for training/directories
 
@@ -281,6 +297,10 @@ def get_args_eval():
 
     else:
          raise ValueError('dataset = '+args['dataset']+' is not in the list')
+
+    ## Don't upsample if HiT and CIFAR10 (very ugly)
+    if args['dataset'] == 'CIFAR10' and args['model_name'] == 'hit':
+        args['upsample'] = False
 
     ## Getting save length to save images and gradients
     args['save_length'] = args['num_images']//args['batch_size']

@@ -20,7 +20,7 @@ from utils import *
 
 ## Train one epoch
 
-def one_epoch(data_loader, net, device, criterion, optimizer, scheduler, fmodel, attack, is_train, eps, sample_size):
+def one_epoch(data_loader, net, device, criterion, optimizer, fmodel, attack, is_train, eps, sample_size):
 
     ## Initialize variables that accumulate stats
     avg_vulnerabilities = 0
@@ -43,11 +43,14 @@ def one_epoch(data_loader, net, device, criterion, optimizer, scheduler, fmodel,
         labels = labels.to(device)
         dtrain = time()
 
-        ## Finding adversaries for that particular epsilon 
-        net.eval()
-        _, [advs], temp_success = attack(fmodel, images, labels, epsilons=[eps])
-        optimizer.zero_grad()
-
+        ## Finding adversaries for that particular epsilon
+        if eps != 0.0: ##
+            net.eval()
+            _, [advs], temp_success = attack(fmodel, images, labels, epsilons=[eps])
+            optimizer.zero_grad()
+        else:
+            advs = images.detach()
+            temp_success = 0
         ## Change it to train mode if we want to train
         if is_train:
             net.train()
@@ -113,7 +116,14 @@ def main(args):
 
     ## Get criterion, optimizer and scheduler
     criterion = nn.CrossEntropyLoss() ## the loss function
-    optimizer = optim.SGD(net.parameters(), lr=args['learning_rate'], momentum=args['momentum'], weight_decay=args['weight_decay']) ## Optimizer
+
+    if args['optimizer'] == 'SGD':
+        optimizer = optim.SGD(net.parameters(), lr=args['learning_rate'], momentum=args['momentum'], weight_decay=args['weight_decay']) ## Optimizer
+    elif args['optimizer'] == 'Adam':
+        optimizer = optim.Adam(net.parameters(), lr=args['learning_rate'], weight_decay=args['weight_decay']) ## Optimizer
+    elif args['optimizer'] == 'AdamW':
+        optimizer = optim.AdamW(net.parameters(), lr=args['learning_rate'], weight_decay=args['weight_decay']) ## Optimizer
+
 
     scheduler = torch.optim.lr_scheduler.OneCycleLR(
                     optimizer=optimizer,
@@ -158,7 +168,7 @@ def main(args):
 
         # Train model on train set for an epoch
         avg_vulnerabilities, avg_adv_loss, avg_adv_accuracy, avg_input_grad_norm, avg_adv_grad_norm \
-            = one_epoch(tr_loader, net, device, criterion, optimizer, scheduler, fmodel, attack, True, args['epsilon'], args['sample_size'])
+            = one_epoch(tr_loader, net, device, criterion, optimizer, fmodel, attack, True, args['epsilon'], args['sample_size'])
 
         vulnerabilities['tr_epoch'].append(avg_vulnerabilities)
         losses_adversaries['tr_epoch'].append(avg_adv_loss)
@@ -172,7 +182,7 @@ def main(args):
 
         # Validation stats for a small sample size
         avg_vulnerabilities, avg_adv_loss, avg_adv_accuracy, avg_input_grad_norm, avg_adv_grad_norm \
-            = one_epoch(va_loader, net, device, criterion, optimizer, scheduler, fmodel, attack, False, args['epsilon'], args['sample_size'])
+            = one_epoch(va_loader, net, device, criterion, optimizer, fmodel, attack, False, args['epsilon'], args['sample_size'])
 
         vulnerabilities['va_epoch'].append(avg_vulnerabilities)
         losses_adversaries['va_epoch'].append(avg_adv_loss)
@@ -183,7 +193,7 @@ def main(args):
 
         # Test stats for a small sample size
         avg_vulnerabilities, avg_adv_loss, avg_adv_accuracy, avg_input_grad_norm, avg_adv_grad_norm \
-            = one_epoch(te_loader, net, device, criterion, optimizer, scheduler, fmodel, attack, False, args['epsilon'], args['sample_size'])
+            = one_epoch(te_loader, net, device, criterion, optimizer, fmodel, attack, False, args['epsilon'], args['sample_size'])
 
         vulnerabilities['te_epoch'].append(avg_vulnerabilities)
         losses_adversaries['te_epoch'].append(avg_adv_loss)

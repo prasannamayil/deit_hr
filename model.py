@@ -600,6 +600,24 @@ def get_model(args):
         if args['num_scales'] > 1:
             edit_pos_embedding(model, img_size=224, patch_size=16, embedding_size=192, timm=True, interpolate=args['interpolate_pos_embedding'])
 
+    elif model_name == 'hit':
+        model = create_model('vit_deit_tiny_patch16_224', num_scales = args['num_scales'], attn_stats = args['sa_stats'], rw_attn=args['rw_attn'], rw_coeff=args['rw_coeff'], pretrained=False)
+        print(f"Loaded HiT with classes = {num_classes}")
+
+        ## Finetuning only the classifier
+        if not train_all_params:
+            for param in model.parameters():
+                param.requires_grad = False
+
+            model.classifier.weight.requires_grad = True
+            model.classifier.bias.requires_grad = True
+            print("Training only the classifier")
+
+        ## Editing the position embedding if num_scales > 1
+        if args['num_scales'] > 1:
+            edit_pos_embedding(model, img_size=224, patch_size=16, embedding_size=192, timm=True, interpolate=args['interpolate_pos_embedding'])
+
+
     else:
         print("Model doesn't exist")
 
