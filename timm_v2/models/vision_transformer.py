@@ -132,7 +132,7 @@ default_cfgs = {
     ),
 
     'hit_small_patch1_32': _cfg(
-        url='', 'input_size': (3, 32, 32), mean=(0.449, 0.449, 0.449), std=(0.226, 0.226, 0.226), interpolation='bilinear', num_classes=10,
+        url='', input_size=(3, 32, 32), mean=(0.449, 0.449, 0.449), std=(0.226, 0.226, 0.226), interpolation='bilinear', num_classes=10,
     ),
 }
 
