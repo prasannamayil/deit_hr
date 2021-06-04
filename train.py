@@ -68,7 +68,11 @@ def one_epoch(data_loader, net, device, criterion, optimizer, fmodel, attack, is
 
 
         ## Losses, Accuracies, and Grad norms of adversarial images at each batch
-        avg_vulnerabilities+=temp_success.sum().item() ## total vulnerable images
+        if eps != 0.0:
+            avg_vulnerabilities+=temp_success.sum().item() ## total vulnerable images
+        else:
+            avg_vulnerabilities+=temp_success
+
         avg_adv_loss+=loss_advs.item()*len(images)
         avg_adv_accuracy+=acc_advs.item()
 

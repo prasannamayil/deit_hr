@@ -93,7 +93,11 @@ def eval(data_loader, net, device, criterion, attack, fmodel, optimizer, sample_
                   adv_images[k] = advs.cpu().numpy() # Taking the first batch of adversaries for that particular epsilon essentially
 
                   ## Labels and logits
-                  advs_success_failures[k] = advs_success.cpu().numpy()[0, :]
+                  if k!=0.0:
+                        advs_success_failures[k] = advs_success.cpu().numpy()[0, :]
+                  else:
+                        advs_success_failures[k] = advs_success
+
                   logits_advs[k] = torch.nn.functional.softmax(net(advs), dim = 1).cpu().detach().numpy()
               else:
                   ## Images: normal, segmented etc.
@@ -102,8 +106,11 @@ def eval(data_loader, net, device, criterion, attack, fmodel, optimizer, sample_
                   ## Labels and logits
                   advs_success_failures[k] = np.hstack((advs_success_failures[k], advs_success.cpu().numpy()[0, :]))
                   logits_advs[k] = np.vstack((logits_advs[k], torch.nn.functional.softmax(net(advs), dim = 1).cpu().detach().numpy()))
-
-          avg_vulnerabilities[k]+=advs_success.sum().item()
+          if k != 0.0:
+              avg_vulnerabilities[k]+=advs_success.sum().item()
+          else:
+              avg_vulnerabilities[k]+=advs_success
+              
           optimizer.zero_grad()
 
           # Adversarial images stats and advesarial input gradients
