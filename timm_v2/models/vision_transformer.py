@@ -330,7 +330,7 @@ class VisionTransformer(nn.Module):
 
         self.blocks = nn.ModuleDict()
         for i in range(depth):
-            self.blocks[i] = Block(dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale, drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, act_layer=act_layer, num_scales=num_scales, attn_stats=attn_stats, rw_attn=rw_attn, rw_coeff=rw_coeff)
+            self.blocks[str(i)] = Block(dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale, drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, act_layer=act_layer, num_scales=num_scales, attn_stats=attn_stats, rw_attn=rw_attn, rw_coeff=rw_coeff)
 
         self.norm = norm_layer(embed_dim)
 
@@ -401,7 +401,7 @@ class VisionTransformer(nn.Module):
 
         x = self.pos_drop(x + self.pos_embed)
         for i in range(self.depth):
-            x = self.blocks[i](x, self.reweighting_matrix)
+            x = self.blocks[str(i)](x, self.reweighting_matrix)
         x = self.norm(x)
         if self.dist_token is None:
             return self.pre_logits(x[:, 0])
