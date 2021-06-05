@@ -161,7 +161,11 @@ class Attention(nn.Module):
             self.attn_weights = None
 
         ## get the reweighting matrix
+        print("attn first print")
+        print(rw_matrix.type)
         self.reweighting_matrix=rw_matrix.detach()
+        print("attn second print")
+        print(self.reweighting_matrix.type)
 
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
@@ -215,7 +219,8 @@ class Block(nn.Module):
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
-
+        print("Block print")
+        print(rw_matrix.type)
     def forward(self, x):
         x = x + self.drop_path(self.attn(self.norm1(x)))
         x = x + self.drop_path(self.mlp(self.norm2(x)))
@@ -313,6 +318,8 @@ class VisionTransformer(nn.Module):
             rw_matrix = hierarchical_reweighting_matrix(num_scales, within_scale_attn=None, rw_coeff=rw_coeff)
             self.reweighting_matrix = torch.nn.Parameter(torch.Tensor(rw_matrix))
             self.reweighting_matrix.requires_grad = False ## Very very important
+        print("vit print")
+        print(self.reweighting_matrix.type)
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.dist_token = nn.Parameter(torch.zeros(1, 1, embed_dim)) if distilled else None
