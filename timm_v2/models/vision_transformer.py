@@ -39,10 +39,7 @@ _logger = logging.getLogger(__name__)
 class mySequential(nn.Sequential):
     def forward(self, *inputs):
         for module in self._modules.values():
-            if type(inputs) == tuple:
-                inputs = module(*inputs)
-            else:
-                inputs = module(inputs)
+            inputs = module(*inputs)
         return inputs
 
 def _cfg(url='', **kwargs):
