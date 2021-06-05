@@ -265,6 +265,7 @@ class VisionTransformer(nn.Module):
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
         act_layer = act_layer or nn.GELU
 
+        self.depth = depth
         self.num_scales = num_scales ## for multiscale ViT
 
         self.patch_embed = embed_layer(
@@ -321,11 +322,18 @@ class VisionTransformer(nn.Module):
         self.pos_drop = nn.Dropout(p=drop_rate)
 
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
-        self.blocks = mySequential(*[
-            Block(
-                dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
+        # self.blocks = nn.Sequential(*[
+        #     Block(
+        #         dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
+        #         drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, act_layer=act_layer, num_scales=num_scales, attn_stats=attn_stats, rw_attn=rw_attn, rw_coeff=rw_coeff)
+        #     for i in range(depth)])
+
+        self.blocks = nn.ModuleDict()
+        for i in range(depth):
+            self.blocks[i] = Block(\
+                dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,\
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, act_layer=act_layer, num_scales=num_scales, attn_stats=attn_stats, rw_attn=rw_attn, rw_coeff=rw_coeff)
-            for i in range(depth)])
+
         self.norm = norm_layer(embed_dim)
 
         # Representation layer
@@ -394,7 +402,8 @@ class VisionTransformer(nn.Module):
         x = torch.cat((cls_token, emb), dim=1)
 
         x = self.pos_drop(x + self.pos_embed)
-        x = self.blocks(x, self.reweighting_matrix)
+        for i in range(self.depth):
+            x = self.blocks[i](x, self.reweighting_matrix)
         x = self.norm(x)
         if self.dist_token is None:
             return self.pre_logits(x[:, 0])
