@@ -142,7 +142,7 @@ class Attention(nn.Module):
     multiscale only works for DeiT tiny. For other models need to pass in model specs (embed_dim, num_tokens, heads etc.)
     as arguments and edit code chunks and functions accordingly.
     """
-    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., num_scales=1, attn_stats=False, rw_attn=None, rw_coeff=1, rw_matrix=None):
+    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., num_scales=1, attn_stats=False, rw_attn=None, rw_coeff=1):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
@@ -160,20 +160,12 @@ class Attention(nn.Module):
             self.out_val = None
             self.attn_weights = None
 
-        ## get the reweighting matrix
-        print("attn first print")
-        print(rw_matrix.type)
-        self.reweighting_matrix=rw_matrix.detach()
-        print("attn second print")
-        print(self.reweighting_matrix.type)
-
-
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
-    def forward(self, x):
+    def forward(self, x, reweighting_matrix):
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
@@ -189,7 +181,7 @@ class Attention(nn.Module):
 
         ## Reweighting attention
         if self.rw_attn is not None:
-            attn = attn*self.reweighting_matrix ## Softmax before because of some numerical instability issue
+            attn = attn*reweighting_matrix ## Softmax before because of some numerical instability issue
             attn = attn/torch.sum(attn, dim=-1, keepdim=True)
 
         attn = self.attn_drop(attn)
@@ -209,20 +201,18 @@ class Attention(nn.Module):
 class Block(nn.Module):
 
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, num_scales=1, attn_stats=False, rw_attn=None, rw_coeff=None, rw_matrix=None):
+                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, num_scales=1, attn_stats=False, rw_attn=None, rw_coeff=None):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = Attention(
-            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop, num_scales=num_scales, attn_stats=attn_stats, rw_attn=rw_attn, rw_coeff=rw_coeff, rw_matrix=rw_matrix)
+            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop, num_scales=num_scales, attn_stats=attn_stats, rw_attn=rw_attn, rw_coeff=rw_coeff)
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
-        print("Block print")
-        print(rw_matrix.type)
-    def forward(self, x):
-        x = x + self.drop_path(self.attn(self.norm1(x)))
+    def forward(self, x, reweighting_matrix):
+        x = x + self.drop_path(self.attn(self.norm1(x), reweighting_matrix))
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
 
@@ -318,8 +308,6 @@ class VisionTransformer(nn.Module):
             rw_matrix = hierarchical_reweighting_matrix(num_scales, within_scale_attn=None, rw_coeff=rw_coeff)
             self.reweighting_matrix = torch.nn.Parameter(torch.Tensor(rw_matrix))
             self.reweighting_matrix.requires_grad = False ## Very very important
-        print("vit print")
-        print(self.reweighting_matrix.type)
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.dist_token = nn.Parameter(torch.zeros(1, 1, embed_dim)) if distilled else None
@@ -330,7 +318,7 @@ class VisionTransformer(nn.Module):
         self.blocks = nn.Sequential(*[
             Block(
                 dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
-                drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, act_layer=act_layer, num_scales=num_scales, attn_stats=attn_stats, rw_attn=rw_attn, rw_coeff=rw_coeff, rw_matrix=self.reweighting_matrix)
+                drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, act_layer=act_layer, num_scales=num_scales, attn_stats=attn_stats, rw_attn=rw_attn, rw_coeff=rw_coeff)
             for i in range(depth)])
         self.norm = norm_layer(embed_dim)
 
@@ -400,7 +388,7 @@ class VisionTransformer(nn.Module):
         x = torch.cat((cls_token, emb), dim=1)
 
         x = self.pos_drop(x + self.pos_embed)
-        x = self.blocks(x)
+        x = self.blocks(x, self.reweighting_matrix)
         x = self.norm(x)
         if self.dist_token is None:
             return self.pre_logits(x[:, 0])
