@@ -18,6 +18,8 @@ from resnet import StdConv2d
 from utils import (get_width_and_height_from_size, load_pretrained_weights,
                     get_model_params, edit_pos_embedding)
 
+from topdown import *
+
 ## import from timm_v2
 from timm_v2 import *
 ##<====================== Edited ViT CLASS from tchzhangzi =====================>
@@ -616,6 +618,12 @@ def get_model(args):
         ## Editing the position embedding if num_scales > 1
         if args['num_scales'] > 1:
             edit_pos_embedding(model, img_size=32, patch_size=1, embedding_size=192, timm=True, interpolate=args['interpolate_pos_embedding'])
+
+    elif model_name == 'hit_cj':
+        if args['rw_attn'] == 'hierarchical_peers':
+            model = small_cifar_msvit()
+        else:
+            model = small_cifar_msvit(attend_to_peers=False)
 
     else:
         print("Model doesn't exist")

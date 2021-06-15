@@ -13,24 +13,24 @@ def get_args_train():
     parser = argparse.ArgumentParser()
     
     ## Training procedure args
-    parser.add_argument("--model_name", type=str, default='hit', help="what model to PGD train.  Possible args are vit, resnet, efficientnet, deit_tiny, hit")
+    parser.add_argument("--model_name", type=str, default='hit_cj', help="what model to PGD train.  Possible args are vit, resnet, efficientnet, deit_tiny, hit")
     parser.add_argument("--train_all_params", type=bool, default=True, help="Train the entire network or just the classifier")
-    parser.add_argument("--train_steps", type=int, default=20000, help="number_of_steps_train")
-    parser.add_argument("--warmup_steps", type=int, default=500, help='learning rate warm up steps')
+    parser.add_argument("--train_steps", type=int, default=300000, help="number_of_steps_train")
+    parser.add_argument("--warmup_steps", type=int, default=7000, help='learning rate warm up steps')
     parser.add_argument("--learning_rate", type=float, default=0.03, help='learning rate to train the model')
     parser.add_argument("--num_workers", type=int, default=8, help='number of workers for the data loader')
     parser.add_argument("--pgd_steps", type=int, default=20, help='number of PGD steps')
     parser.add_argument("--attack_key", type=str, default='L2PGD', help='The PGD attack type')
     parser.add_argument("--epsilon", type=float, default=0.0, help='epsilon to attack the model')
-    parser.add_argument("--batch_size", type=int, default=128, help='batch size')
-    parser.add_argument("--number_of_gpus", type=int, default=8, help='number of GPUs to train the model with')
+    parser.add_argument("--batch_size", type=int, default=100, help='batch size')
+    parser.add_argument("--number_of_gpus", type=int, default=1, help='number of GPUs to train the model with')
     parser.add_argument("--sample_size", type=int, default=5000, help='sample size to collect stats from test and val datasets')
     parser.add_argument("--resume_training", type=bool, default=False, help='To resume training from checkpoint')
-    parser.add_argument("--base_directory", type=str, default= "/cluster/scratch/pmayilvahana/deit_hr_week13/", help="directory to save everything")
+    parser.add_argument("--base_directory", type=str, default= "/cluster/scratch/pmayilvahana/deit_hr_peers_week15/", help="directory to save everything")
     parser.add_argument("--bounds", type=tuple, default=(0, 1), help='bounds for foolbox fmodel')
 
     parser.add_argument("--optimizer", type=str, default='AdamW', help='SGD/Adam/AdamW')
-    parser.add_argument("--weight_decay", type=float, default=0.0,help='weight decay for optim')
+    parser.add_argument("--weight_decay", type=float, default=0.05,help='weight decay for optim')
     parser.add_argument("--momentum", type=float, default=0.9,help='momentum for optim')
 
     parser.add_argument("--colab", type=bool, default=False,help='marker for training on colab')
@@ -44,8 +44,12 @@ def get_args_train():
     parser.add_argument("--ablation", type=bool, default=False, help="fix qk values for ablation study")
     parser.add_argument("--sa_stats", type=bool, default=False, help="retreive self attention stats like q, k, v, attn etc.")
     parser.add_argument("--interpolate_pos_embedding", type=bool, default=True, help="interpolate pos embedding or just take average")
-    parser.add_argument("--rw_attn", type=str, default='hierarchical_peers', help="reweight attention, options: standard, hierarchical")
+    parser.add_argument("--rw_attn", type=str, default='hierarchical_peers', help="reweight attention, options: standard, hierarchical, hierarchical_peers, hierarchical_vertical")
     parser.add_argument("--rw_coeff", type=float, default=1, help="reweight attention, options: 2, 4. Note: if hierarchical, always give at least 1. If standard, give 2 or 4. ")
+
+    parser.add_argument("--lr_index", type=int, default=1, help="lr_index")
+    parser.add_argument("--wd_index", type=int, default=1, help="wd_index")
+
 
     """ Can make the entire chunk/s below cleaner
     """
@@ -54,6 +58,13 @@ def get_args_train():
 
     ## Create args and add some extra things (make it cuter later)
     args = vars(ap)
+
+    ## Getting the right learning rates and weight decay
+    lr_stack = np.repeat([1.0e-2, 1.0e-3, 1.0e-4, 1.0e-5], 3)
+    wd_stack = np.tile([0.05, 0.01, 0.1], 4)
+
+    args['learning_rate'] = lr_stack[args['lr_index']]
+    args['wd'] = wd_stack[args['wd_index']]
 
     ## Getting the model key and model input size
 
@@ -75,6 +86,9 @@ def get_args_train():
 
     elif args['model_name'] == 'hit':  ##  ## deit tiny
         args['model_key'] = str(5)
+        args['model_input_size'] = 32
+    elif args['model_name'] == 'hit_cj':  ##  ## deit tiny
+        args['model_key'] = str(6)
         args['model_input_size'] = 32
 
     else:
@@ -100,7 +114,7 @@ def get_args_train():
 
     ## Reedit and make new directories where we want to save
 
-    args['directory'] = args['base_directory']+args['eps_key']+str(args['num_scales'])+"/"
+    args['directory'] = args['base_directory']+str(args['num_scales'])+str(args['lr_index'])+"/"
     args['directory_net']=args['directory']+"net/"
 
     if args['colab'] is False and not os.path.exists(args['directory_net']):
@@ -163,16 +177,16 @@ def get_args_eval():
     parser = argparse.ArgumentParser()
 
     ## basic eval procedure arguments
-    parser.add_argument("--model_name", type=str, default='hit', help="what model to PGD eval. Possible args are vit, resnet, efficientnet, deit_tiny, hit")
+    parser.add_argument("--model_name", type=str, default='hit_cj', help="what model to PGD eval. Possible args are vit, resnet, efficientnet, deit_tiny, hit")
     parser.add_argument("--train_all_params", type=bool, default=True, help="Train the entire network or just the classifier")
     parser.add_argument("--learning_rate", type=float, default=0.03, help='learning rate to train the model')
     parser.add_argument("--num_workers", type=int, default=8, help='number of workers for the data loader')
     parser.add_argument("--pgd_steps", type=int, default=20, help='number of PGD steps')
     parser.add_argument("--epsilon", type=float, default=0.0, help='epsilon to attack the model')
-    parser.add_argument("--batch_size", type=int, default=128, help='batch size')
-    parser.add_argument("--number_of_gpus", type=int, default=8, help='number of GPUs to train the model with')
-    parser.add_argument("--base_directory", type=str, default= "/cluster/scratch/pmayilvahana/deit_hr_week13/", help="directory to save everything") ## needs rework
-    parser.add_argument("--base_directory_weights", type=str, default= "/cluster/scratch/pmayilvahana/deit_hr_week13/", help="directory with weights") ## needs rework
+    parser.add_argument("--batch_size", type=int, default=100, help='batch size')
+    parser.add_argument("--number_of_gpus", type=int, default=1, help='number of GPUs to train the model with')
+    parser.add_argument("--base_directory", type=str, default= "/cluster/scratch/pmayilvahana/deit_hr_peers_week15/", help="directory to save everything") ## needs rework
+    parser.add_argument("--base_directory_weights", type=str, default= "/cluster/scratch/pmayilvahana/deit_hr_peers_week15/", help="directory with weights") ## needs rework
     
     parser.add_argument("--bounds", type=tuple, default=(0, 1), help='bounds for foolbox fmodel')
     parser.add_argument("--weight_decay", type=float, default=0.0,help='weight decay for optim')
@@ -205,10 +219,20 @@ def get_args_eval():
     parser.add_argument("--rw_attn", type=str, default='hierarchical_peers', help="reweight attention, options: standard, hierarchical, hierarchical_peers, hierarchical_vertical")
     parser.add_argument("--rw_coeff", type=float, default=1, help="reweight attention, options: 2, 4. Note: if hierarchical, always give at least 1. If standard, give 2 or 4. ")
 
+    parser.add_argument("--lr_index", type=int, default=1, help="lr_index")
+    parser.add_argument("--wd_index", type=int, default=1, help="wd_index")
+
     ap = parser.parse_args()
 
     ## Create args and add some extra things 
     args = vars(ap)
+
+    ## Getting the right learning rates and weight decay
+    lr_stack = np.repeat([1.0e-2, 1.0e-3, 1.0e-4, 1.0e-5], 3)
+    wd_stack = np.tile([0.05, 0.01, 0.1], 4)
+
+    args['learning_rate'] = lr_stack[args['lr_index']]
+    args['wd'] = wd_stack[args['wd_index']]
 
     ## Getting the model key and model input size
 
@@ -230,6 +254,9 @@ def get_args_eval():
 
     elif args['model_name'] == 'hit':  ##  ## deit tiny
         args['model_key'] = str(5)
+        args['model_input_size'] = 32
+    elif args['model_name'] == 'hit_cj':  ##  ## deit tiny
+        args['model_key'] = str(6)
         args['model_input_size'] = 32
 
     ## Get the epsilon key and eps stuff for training/directories
@@ -261,8 +288,8 @@ def get_args_eval():
 
     ## Reedit and make new directories where we want to save
 
-    args['directory'] = args['base_directory']+args['eps_key']+str(args['num_scales'])+"/eval/"
-    args['directory_net'] = args['base_directory_weights']+args['eps_key']+str(args['num_scales'])+"/net/"
+    args['directory'] = args['base_directory']+str(args['num_scales'])+str(args['lr_index'])+"/eval/"
+    args['directory_net'] = args['base_directory_weights']+str(args['num_scales'])+str(args['lr_index'])+"/net/"
     if args['colab'] is False and not os.path.exists(args['directory']):
         os.makedirs(args['directory'])
 

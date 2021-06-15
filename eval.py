@@ -110,7 +110,7 @@ def eval(data_loader, net, device, criterion, attack, fmodel, optimizer, sample_
               avg_vulnerabilities[k]+=advs_success.sum().item()
           else:
               avg_vulnerabilities[k]+=advs_success
-              
+
           optimizer.zero_grad()
 
           # Adversarial images stats and advesarial input gradients
@@ -185,7 +185,12 @@ def main(args):
 
     ## actual net loading
     net.load_state_dict(checkpoint['state_dict'])
-    optimizer = optim.SGD(net.parameters(), lr=args['learning_rate'], momentum=args['momentum'], weight_decay=args['weight_decay']) ## Optimizer
+    if args['optimizer'] == 'SGD':
+        optimizer = optim.SGD(net.parameters(), lr=args['learning_rate'], momentum=args['momentum'], weight_decay=args['weight_decay']) ## Optimizer
+    elif args['optimizer'] == 'Adam':
+        optimizer = optim.Adam(net.parameters(), lr=args['learning_rate'], weight_decay=args['weight_decay']) ## Optimizer
+    elif args['optimizer'] == 'AdamW':
+        optimizer = optim.AdamW(net.parameters(), lr=args['learning_rate'], weight_decay=args['weight_decay']) ## Optimizer
     optimizer.load_state_dict(checkpoint['optimizer'])
 
     ## Compute weights change

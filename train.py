@@ -119,6 +119,8 @@ def main(args):
     net = wrap_model(model, args)
     print(f"model upsampled? {net.upsample}")
 
+    ## Initialize 
+
     ## Get criterion, optimizer and scheduler
     criterion = nn.CrossEntropyLoss() ## the loss function
 
