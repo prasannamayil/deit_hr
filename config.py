@@ -6,6 +6,7 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 import pickle
+import numpy as np
 
 ## Command line arguments are always strings. Tuples/list arguments need a fix.
 
