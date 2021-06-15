@@ -156,7 +156,7 @@ def get_args_train():
          raise ValueError('dataset = '+args['dataset']+' is not in the list')
 
     ## Don't upsample if HiT and CIFAR10 (very ugly)
-    if args['dataset'] == 'CIFAR10' and args['model_name'] == 'hit':
+    if args['dataset'] == 'CIFAR10' and 'hit' in args['model_name']:
         args['upsample'] = False
 
     ## number of epochs
@@ -327,7 +327,7 @@ def get_args_eval():
          raise ValueError('dataset = '+args['dataset']+' is not in the list')
 
     ## Don't upsample if HiT and CIFAR10 (very ugly)
-    if args['dataset'] == 'CIFAR10' and args['model_name'] == 'hit':
+    if args['dataset'] == 'CIFAR10' and 'hit' in args['model_name']:
         args['upsample'] = False
 
     ## Getting save length to save images and gradients
